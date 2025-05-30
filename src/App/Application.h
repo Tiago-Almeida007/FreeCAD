@@ -25,6 +25,7 @@
 #define SRC_APP_APPLICATION_H_
 
 #include <boost/signals2.hpp>
+#include <QtCore/qtextstream.h>
 
 #include <deque>
 #include <vector>
@@ -304,6 +305,8 @@ public:
     //@{
     /// signal on adding a dynamic property
     boost::signals2::signal<void (const App::Property&)> signalAppendDynamicProperty;
+    /// signal on renaming a dynamic property
+    boost::signals2::signal<void (const App::Property&, const char*)> signalRenameDynamicProperty;
     /// signal on about removing a dynamic property
     boost::signals2::signal<void (const App::Property&)> signalRemoveDynamicProperty;
     /// signal on about changing the editor mode of a property
@@ -431,6 +434,16 @@ public:
     static std::string getResourceDir();
     static std::string getLibraryDir();
     static std::string getHelpDir();
+    //@}
+
+    /** @name Verbose Information */
+    //@{
+    static void getVerboseCommonInfo(QTextStream& str, const std::map<std::string,std::string>& mConfig);
+    static void getVerboseAddOnsInfo(QTextStream& str, const std::map<std::string,std::string>& mConfig);
+    static void addModuleInfo(QTextStream& str, const QString& modPath, bool& firstMod);
+    static QString prettyProductInfoWrapper();
+    static QString getValueOrEmpty(const std::map<std::string, std::string>& map, const std::string& key);
+    static constexpr const char* verboseVersionEmitMessage{"verbose_version"};
     //@}
 
     /** @name Link handling */

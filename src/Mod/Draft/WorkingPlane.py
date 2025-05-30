@@ -241,6 +241,40 @@ class PlaneBase:
         self.position = pos + (self.axis * offset)
         return True
 
+    def align_to_face_and_edge(self, face, edge, offset=0):
+        """Align the WP to a face and an edge.
+
+        The face must be planar.
+
+        The WP will lie on the face, but its `position` will be the
+        first vertex of the edge, and its `u` vector will be aligned
+        with the edge.
+
+        Parameters
+        ----------
+
+        face: Part.Face
+            Face.
+        edge: Part.Edge
+            Edge, need not be an edge of the face.
+        offset: float, optional
+            Defaults to zero.
+            Offset along the WP `axis`.
+
+        Returns
+        -------
+        `True`/`False`
+            `True` if successful.
+        """
+        if face.Surface.isPlanar() is False:
+            return False
+        axis = face.normalAt(0,0)
+        point = edge.Vertexes[0].Point
+        upvec = edge.Vertexes[-1].Point.sub(point)
+        return self.align_to_point_and_axis(point, axis, offset, upvec)
+        #vertex = Part.Vertex(face.CenterOfMass)
+        #return self.align_to_edges_vertexes([edge, vertex], offset)
+
     def align_to_face(self, shape, offset=0):
         """Align the WP to a face with an optional offset.
 
@@ -1256,11 +1290,14 @@ class PlaneGui(PlaneBase):
                 objs.append(Part.getShape(sel.Object, sub, needSubElement=True, retType=1))
 
         if len(objs) != 1:
+            ret = False
             if all([obj[0].isNull() is False and obj[0].ShapeType in ["Edge", "Vertex"] for obj in objs]):
                 ret = self.align_to_edges_vertexes([obj[0] for obj in objs], offset, _hist_add)
-            else:
-                ret = False
-
+            elif all([obj[0].isNull() is False and obj[0].ShapeType in ["Edge", "Face"] for obj in objs]):
+                    edges = [obj[0] for obj in objs if obj[0].ShapeType == "Edge"]
+                    faces = [obj[0] for obj in objs if obj[0].ShapeType == "Face"]
+                    if faces and edges:
+                            ret = self.align_to_face_and_edge(faces[0], edges[0], offset, _hist_add)
             if ret is False:
                 _wrn(translate("draft", "Selected shapes do not define a plane"))
             return ret
@@ -1269,7 +1306,7 @@ class PlaneGui(PlaneBase):
         place = FreeCAD.Placement(mtx)
 
         typ = utils.get_type(obj)
-        if typ in ["App::Part", "PartDesign::Plane", "Axis", "SectionPlane"]:
+        if typ in ["App::Part", "Part::DatumPlane", "PartDesign::Plane", "Axis", "SectionPlane"]:
             ret = self.align_to_obj_placement(obj, offset, place, _hist_add)
         elif typ == "WorkingPlaneProxy":
             ret = self.align_to_wp_proxy(obj, offset, place, _hist_add)
@@ -1325,6 +1362,13 @@ class PlaneGui(PlaneBase):
     def align_to_face(self, shape, offset=0, _hist_add=True):
         """See PlaneBase.align_to_face."""
         if super().align_to_face(shape, offset) is False:
+            return False
+        self._handle_custom(_hist_add)
+        return True
+
+    def align_to_face_and_edge(self, face, edge, offset=0, _hist_add=True):
+        """See PlaneBase.align_to_face."""
+        if super().align_to_face_and_edge(face, edge, offset) is False:
             return False
         self._handle_custom(_hist_add)
         return True
@@ -1623,6 +1667,7 @@ class PlaneGui(PlaneBase):
         self.set_parameters(self._history["data_list"][idx])
         self._history["idx"] = idx
         self._update_all(_hist_add=False)
+        return self._history["data_list"][idx]
 
     def _next(self):
         idx = self._history["idx"]
@@ -1788,19 +1833,7 @@ if FreeCAD.GuiUp:
         except Exception:
             pass
 
-    def _view_observer_callback(sub_win):
-        if sub_win is None:
-            return
-        view = gui_utils.get_3d_view()
-        if view is None:
-            return
-        if not hasattr(FreeCADGui, "draftToolBar"):
-            return
-        tray = FreeCADGui.draftToolBar.tray
-        if tray is None:
-            return
-        if FreeCADGui.draftToolBar.tray.isVisible() is False:
-            return
+    def _view_observer_callback():
         ToDo.delay(_update_gui, None)
 
     _view_observer_active = False
@@ -1812,7 +1845,7 @@ if FreeCAD.GuiUp:
         if not _view_observer_active:
             mdi.subWindowActivated.connect(_view_observer_callback)
             _view_observer_active = True
-            _view_observer_callback(mdi.activeSubWindow())  # Trigger initial update.
+            _view_observer_callback()  # Trigger initial update.
 
     def _view_observer_stop():
         mw = FreeCADGui.getMainWindow()
